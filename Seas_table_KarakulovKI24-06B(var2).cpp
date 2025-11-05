@@ -5,6 +5,9 @@
 #include <fstream>
 #include <algorithm>
 #include <cmath>
+#include <vector>
+#include <map>
+#include <functional>
 #define NOMINMAX
 #include <Windows.h>
 
@@ -19,6 +22,12 @@ struct Sea {
     std::string name;        // Название моря
     double depth;       // Глубина в метрах
     double salinity;    // Солёность в промилле
+};
+
+// Структура для информации о функции меню
+struct MenuInfo {
+    std::function<void()> callback;
+    std::string description;
 };
 
 // Функция для безопасного ввода числа с проверкой диапазона
@@ -67,11 +76,11 @@ void PrintSeaData(const Sea& sea) {
 }
 
 // Функция для поиска индекса самого глубокого моря
-int FindDeepestSeaIndex(const Sea seas[], int sea_count) {
-    if (sea_count <= 0) return -1;
+int FindDeepestSeaIndex(const std::vector<Sea>& seas) {
+    if (seas.empty()) return -1;
 
     int max_index = 0;
-    for (int i = 1; i < sea_count; ++i) {
+    for (int i = 1; i < seas.size(); ++i) {
         if (seas[i].depth > seas[max_index].depth) {
             max_index = i;
         }
@@ -80,11 +89,11 @@ int FindDeepestSeaIndex(const Sea seas[], int sea_count) {
 }
 
 // Функция для поиска индекса моря с минимальной солёностью
-int FindLeastSaltySeaIndex(const Sea seas[], int sea_count) {
-    if (sea_count <= 0) return -1;
+int FindLeastSaltySeaIndex(const std::vector<Sea>& seas) {
+    if (seas.empty()) return -1;
 
     int min_index = 0;
-    for (int i = 1; i < sea_count; ++i) {
+    for (int i = 1; i < seas.size(); ++i) {
         if (seas[i].salinity < seas[min_index].salinity) {
             min_index = i;
         }
@@ -93,33 +102,32 @@ int FindLeastSaltySeaIndex(const Sea seas[], int sea_count) {
 }
 
 // Функция для вычисления средней глубины
-double CalculateAverageDepth(const Sea seas[], int sea_count) {
-    if (sea_count <= 0) return 0.0;
+double CalculateAverageDepth(const std::vector<Sea>& seas) {
+    if (seas.empty()) return 0.0;
 
     double sum = 0.0;
-    for (int i = 0; i < sea_count; ++i) {
-        sum += seas[i].depth;
+    for (const auto& sea : seas) {
+        sum += sea.depth;
     }
-    return sum / sea_count;
+    return sum / seas.size();
 }
 
 // Функция для сортировки морей по глубине (по убыванию)
-void SortSeasByDepth(Sea seas[], int sea_count) {
-    std::sort(seas, seas + sea_count, [](const Sea& a, const Sea& b) {
+void SortSeasByDepth(std::vector<Sea>& seas) {
+    std::sort(seas.begin(), seas.end(), [](const Sea& a, const Sea& b) {
         return a.depth > b.depth; // Сортировка по убыванию глубины
         });
 }
 
 // Функция для поиска морей по солёности
-void FindSeasBySalinity(const Sea seas[], int sea_count, double target_salinity, double tolerance = 0.1) {
+void FindSeasBySalinity(const std::vector<Sea>& seas, double target_salinity, double tolerance = 0.1) {
     std::cout << "\n=== МОРЯ С СОЛЁНОСТЬЮ " << target_salinity << "‰ (±" << tolerance << "‰) ===" << std::endl;
     std::cout << "+----------------------+------------+--------------+" << std::endl;
 
-
     bool found = false;
-    for (int i = 0; i < sea_count; ++i) {
-        if (std::abs(seas[i].salinity - target_salinity) <= tolerance) {
-            PrintSeaData(seas[i]);
+    for (const auto& sea : seas) {
+        if (std::abs(sea.salinity - target_salinity) <= tolerance) {
+            PrintSeaData(sea);
             found = true;
         }
     }
@@ -131,7 +139,7 @@ void FindSeasBySalinity(const Sea seas[], int sea_count, double target_salinity,
 }
 
 // Функция для чтения данных из файла
-int ReadSeasFromFile(const std::string& filename, Sea seas[]) {
+int ReadSeasFromFile(const std::string& filename, std::vector<Sea>& seas) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         std::cout << "Ошибка открытия файла " << filename << std::endl;
@@ -156,7 +164,7 @@ int ReadSeasFromFile(const std::string& filename, Sea seas[]) {
             sea.depth = std::stod(line.substr(pos1 + 1, pos2 - pos1 - 1));
             sea.salinity = std::stod(line.substr(pos2 + 1));
 
-            seas[count] = sea;
+            seas.push_back(sea);
             count++;
         }
     }
@@ -235,126 +243,93 @@ void PrintAllSeas(const Sea seas[], int sea_count) {
     std::cout << "+----------------------+------------+--------------+" << std::endl;
 }
 
-// Основная функция программы
-int main() {
-    SetConsoleCP(1251);// установка кодовой страницы win-cp 1251 в поток ввода
-    SetConsoleOutputCP(1251); // установка кодовой страницы win-cp 1251 в поток вывода
-    setlocale(LC_ALL, "ru_RU");
-
-    Sea seas[kMaxSeas];  // Массив для хранения данных о морях
-    int sea_count = 0;   // Фактическое количество морей
-
-
-    // Настройка вывода дробных чисел
-    std::cout << std::fixed << std::setprecision(2);
-
-    std::cout << "=== ПРОГРАММА ДЛЯ РАБОТЫ С ДАННЫМИ О МОРЯХ ===" << std::endl;
-
-    // Меню выбора способа ввода данных
-    std::cout << "\nВыберите способ ввода данных:" << std::endl;
-    std::cout << "1 - Ввод с клавиатуры" << std::endl;
-    std::cout << "2 - Чтение из файла (seas.txt)" << std::endl;
-    std::cout << "3 - Удалить море из файла" << std::endl;
-    std::cout << "Ваш выбор: ";
-
-    int choice;
-    std::cin >> choice;
+// Функция для ввода данных с клавиатуры
+void InputFromKeyboard(std::vector<Sea>& seas) {
+    int sea_count;
+    std::cout << "\nВведите количество морей (1-" << kMaxSeas << "): ";
+    std::cin >> sea_count;
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-    if (choice == 1) {
-        // Ввод количества морей
-        std::cout << "\nВведите количество морей (1-" << kMaxSeas << "): ";
-        std::cin >> sea_count;
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-        // Проверка корректности введённого количества
-        if (sea_count < 1 || sea_count > kMaxSeas) {
-            std::cout << "Ошибка! Количество морей должно быть от 1 до " << kMaxSeas << std::endl;
-            return 1;
-        }
-
-        // Ввод данных о морях
-        std::cout << "\n=== ВВОД ДАННЫХ О МОРЯХ ===" << std::endl;
-        for (int i = 0; i < sea_count; ++i) {
-            std::cout << "\nМоре #" << (i + 1) << ":" << std::endl;
-            InputSeaData(seas[i]);
-        }
-
-        // Сохраняем данные в файл
-        WriteSeasToFile("seas.txt", seas, sea_count);
-    }
-    else if (choice == 2) {
-        // Чтение данных из файла
-        sea_count = ReadSeasFromFile("seas.txt", seas);
-        if (sea_count == 0) {
-            std::cout << "Не удалось прочитать данные из файла." << std::endl;
-            return 1;
-        }
-        std::cout << "Успешно прочитано " << sea_count << " морей из файла." << std::endl;
-    }
-    else if (choice == 3) {
-        // Удаление моря из файла
-        std::string sea_name;
-        std::cout << "Введите название моря для удаления: ";
-        std::getline(std::cin, sea_name);
-
-        RemoveSeaFromFile("seas.txt", sea_name);
-        return 0;
-    }
-    else {
-        std::cout << "Неверный выбор!" << std::endl;
-        return 1;
+    // Проверка корректности введённого количества
+    if (sea_count < 1 || sea_count > kMaxSeas) {
+        std::cout << "Ошибка! Количество морей должно быть от 1 до " << kMaxSeas << std::endl;
+        return;
     }
 
-    // Вывод исходной таблицы всех морей
-    PrintAllSeas(seas, sea_count);
+    // Ввод данных о морях
+    std::cout << "\n=== ВВОД ДАННЫХ О МОРЯХ ===" << std::endl;
+    for (int i = 0; i < sea_count; ++i) {
+        std::cout << "\nМоре #" << (i + 1) << ":" << std::endl;
+        Sea sea;
+        InputSeaData(sea);
+        seas.push_back(sea);
+    }
+}
 
-    // Сортировка по глубине
-    SortSeasByDepth(seas, sea_count);
+// Функция для чтения данных из файла
+void InputFromFile(std::vector<Sea>& seas) {
+    int count = ReadSeasFromFile("seas.txt", seas);
+    if (count == 0) {
+        std::cout << "Не удалось прочитать данные из файла." << std::endl;
+        return;
+    }
+    std::cout << "Успешно прочитано " << count << " морей из файла." << std::endl;
+}
+
+// Функция для вывода отсортированной таблицы
+void PrintSortedSeas(std::vector<Sea>& seas) {
+    SortSeasByDepth(seas);
     std::cout << "\n=== ТАБЛИЦА МОРЕЙ (ОТСОРТИРОВАННАЯ ПО ГЛУБИНЕ) ===" << std::endl;
     std::cout << "+----------------------+------------+--------------+" << std::endl;
     std::cout << "| Название             | Глубина (м)| Солёность (‰)|" << std::endl;
     std::cout << "+----------------------+------------+--------------+" << std::endl;
-    for (int i = 0; i < sea_count; ++i) {
-        PrintSeaData(seas[i]);
+    for (const auto& sea : seas) {
+        PrintSeaData(sea);
     }
     std::cout << "+----------------------+------------+--------------+" << std::endl;
+}
 
-    // Поиск по солёности
+// Функция для поиска по солёности
+void SearchBySalinity(const std::vector<Sea>& seas) {
     double target_salinity;
     std::cout << "\n=== ПОИСК ПО СОЛЁНОСТИ ===" << std::endl;
     std::cout << "Введите солёность для поиска: ";
     std::cin >> target_salinity;
-    FindSeasBySalinity(seas, sea_count, target_salinity);
+    FindSeasBySalinity(seas, target_salinity);
+}
 
-    // Поиск и вывод самого глубокого моря
-    int deepest_index = FindDeepestSeaIndex(seas, sea_count);
+// Функция для вывода самого глубокого моря
+void PrintDeepestSea(const std::vector<Sea>& seas) {
+    int deepest_index = FindDeepestSeaIndex(seas);
     if (deepest_index != -1) {
         std::cout << "\n+ САМОЕ ГЛУБОКОЕ МОРЕ -+------------+--------------+" << std::endl;
         PrintSeaData(seas[deepest_index]);
     }
+}
 
-    // Поиск и вывод самого пресного моря
-    int least_salty_index = FindLeastSaltySeaIndex(seas, sea_count);
+// Функция для вывода самого пресного моря
+void PrintLeastSaltySea(const std::vector<Sea>& seas) {
+    int least_salty_index = FindLeastSaltySeaIndex(seas);
     if (least_salty_index != -1) {
         std::cout << "+- САМОЕ ПРЕСНОЕ МОРЕ -+------------+--------------+" << std::endl;
         PrintSeaData(seas[least_salty_index]);
         std::cout << "+----------------------+------------+--------------+" << std::endl;
     }
+}
 
-    // Вывод статистики
-    double average_depth = CalculateAverageDepth(seas, sea_count);
+// Функция для вывода статистики
+void PrintStatistics(const std::vector<Sea>& seas) {
+    double average_depth = CalculateAverageDepth(seas);
     std::cout << "\n=== СТАТИСТИКА ===" << std::endl;
     std::cout << "Средняя глубина всех морей: " << average_depth << " м" << std::endl;
-
 
     // Поиск морей глубже средней глубины
     std::cout << "\n=== МОРЯ ГЛУБЖЕ СРЕДНЕЙ ГЛУБИНЫ ===" << std::endl;
     std::cout << "+----------------------+------------+--------------+" << std::endl;
     bool found_deeper = false;
-    for (int i = 0; i < sea_count; ++i) {
-        if (seas[i].depth > average_depth) {
-            PrintSeaData(seas[i]);
+    for (const auto& sea : seas) {
+        if (sea.depth > average_depth) {
+            PrintSeaData(sea);
             found_deeper = true;
         }
     }
@@ -362,6 +337,80 @@ int main() {
         std::cout << "| Моря глубже средней глубины не найдены. |" << std::endl;
     }
     std::cout << "+----------------------+------------+--------------+" << std::endl;
+}
+
+// Функция для вывода меню выбора способа ввода с использованием map
+int ShowInputMenu(std::vector<Sea>& seas) {
+    // Создаем карту меню с функциями и описаниями
+    const std::map<int, MenuInfo> menu_options = {
+        {1, { [&seas]() { InputFromKeyboard(seas); }, "Ввод с клавиатуры" }},
+        {2, { [&seas]() { InputFromFile(seas); }, "Чтение из файла (seas.txt)" }}
+    };
+
+    std::cout << "\nВыберите способ ввода данных:" << std::endl;
+
+    // Выводим все пункты меню
+    for (const auto& option : menu_options) {
+        std::cout << option.first << " - " << option.second.description << std::endl;
+    }
+
+    std::cout << "Ваш выбор: ";
+
+    int choice;
+    std::cin >> choice;
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+    // Проверяем, существует ли выбранный пункт меню
+    auto it = menu_options.find(choice);
+    if (it != menu_options.end()) {
+        // Вызываем соответствующую функцию
+        it->second.callback();
+        return choice;
+    }
+    else {
+        std::cout << "Неверный выбор!" << std::endl;
+        return -1;
+    }
+}
+
+// Основная функция программы
+int main() {
+    SetConsoleCP(1251);// установка кодовой страницы win-cp 1251 в поток ввода
+    SetConsoleOutputCP(1251); // установка кодовой страницы win-cp 1251 в поток вывода
+    setlocale(LC_ALL, "ru_RU");
+
+    std::vector<Sea> seas;  // Вектор для хранения данных о морях
+
+    // Настройка вывода дробных чисел
+    std::cout << std::fixed << std::setprecision(2);
+
+    std::cout << "=== ПРОГРАММА ДЛЯ РАБОТЫ С ДАННЫМИ О МОРЯХ ===" << std::endl;
+
+    // Меню выбора способа ввода данных с использованием map
+    int result = ShowInputMenu(seas);
+
+    if (result == -1 || seas.empty()) {
+        std::cout << "Нет данных для обработки." << std::endl;
+        return 1;
+    }
+
+    // Вывод исходной таблицы всех морей
+    PrintAllSeas(seas);
+
+    // Сортировка и вывод отсортированной таблицы
+    PrintSortedSeas(seas);
+
+    // Поиск по солёности
+    SearchBySalinity(seas);
+
+    // Поиск и вывод самого глубокого моря
+    PrintDeepestSea(seas);
+
+    // Поиск и вывод самого пресного моря
+    PrintLeastSaltySea(seas);
+
+    // Вывод статистики
+    PrintStatistics(seas);
 
     std::cout << "\nПрограмма завершена успешно!" << std::endl;
     return 0;
